@@ -15,9 +15,8 @@ class keydefaultdict(defaultdict):
 
 
 class AlphaNDCG(object):
-    def __init__(self, qrel_file):
-        self.p = 0.5
-        self.alpha = 0.5
+    def __init__(self, qrel_file, alpha=0.5):
+        self.alpha = alpha
         self.gfs = [lambda x: x]
         self.max_dcg = defaultdict(default_factory=0)
         self.topics = defaultdict(set)
@@ -25,20 +24,22 @@ class AlphaNDCG(object):
         document_dd = lambda: defaultdict(query_dd)
         self.qrel_judgements_dict = defaultdict(document_dd)
         self.load_qrel_judgements(qrel_file)
+        self.max_dcg = keydefaultdict(lambda (qid, depth): self.ideal_dcg(self.topics[qid], qid, depth=depth))
         self.discount = keydefaultdict(lambda rank: log(rank + 2, 2))
 
-    def ideal_dcg(self, dids, topics, qid, depth=20):
+    def ideal_dcg(self, topics, qid, depth=20):
         # Greedy approach
         topicgain = defaultdict(lambda: 1.0)
         dids_left = self.qrel_judgements_dict[qid].keys()
         dcgs = [0.0]
-        for rank in range(min(len(dids), depth)):
+        depth = min(len(dids_left), depth)
+        for rank in range(depth):
             # Compute gain
             g = [self.ideal_gain(did, topics, qid, topicgain) for did in dids_left]
             idx = np.argmax(g)
             max_g = g[idx]
             max_did = dids_left[idx]
-            # Increment topic gain
+            # Increment topic ids
             for tid in topics:
                 if self.qrel_judgements_dict[qid][max_did][tid] > 0:
                     topicgain[tid] *= 1.0 - self.alpha
@@ -67,9 +68,7 @@ class AlphaNDCG(object):
         if qid not in self.topics:
             # TODO: idealIdealAlphaNdcg
             raise NotImplementedError
-        if qid not in self.max_dcg:
-            self.max_dcg[qid] = self.ideal_dcg(dids, self.topics[qid], qid)
-        return self.ndcg(self.dcg(dids, self.topics[qid], qid), self.max_dcg[qid], depth=depth)
+        return self.ndcg(self.dcg(dids, self.topics[qid], qid), self.max_dcg[(qid, depth)], depth=depth)
 
     def dcg(self, r, topics, qid):
         return reduce(lambda dcgs, d: self._dcg(d, topics, qid, dcgs), \
@@ -92,3 +91,10 @@ class AlphaNDCG(object):
 
     def ndcg(self, r, max_dcg, depth=20):
         return r[depth-1]/max_dcg[depth-1]
+
+    def compute_multi(self, results, depth=20):
+        nDCG = dict()
+        for r, qid in results:
+            nDCG[qid] = self.compute(r, qid, depth=depth)
+        nDCG['avg'] = np.mean(nDCG.values())
+        return nDCG

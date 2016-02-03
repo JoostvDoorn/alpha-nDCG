@@ -19,7 +19,7 @@ alpha_nDCG.compute_multi([
 ])
 ```
 
-By default computes alpha-nDCG@20. To change depth set depth.
+By default computes <span>alpha-nDCG@20</span>. To change depth:
 
 ```python
 alpha_nDCG.compute(['docid1', 'docid2', 'docid3'], 'qid', depth=20)
